@@ -1,0 +1,1304 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>STEP Roma — Laboratorio SUMI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; color: #0f172a; }
+    .phone-frame {
+      width: 346px;
+      height: 650px;
+      border-radius: 46px;
+      border: 11px solid #0f172a;
+      box-shadow: 0 28px 60px -12px rgba(15, 23, 42, 0.38), inset 0 0 0 2px #334155;
+      overflow: hidden;
+      position: relative;
+      background: #000;
+    }
+    .chip { display:flex; flex-direction:row; align-items:center; justify-content:space-between; width:100%; padding:10px 12px; border-radius:14px; border:2px solid #e2e8f0; background:#fff; font-weight:700; font-size:11px; color:#334155; text-align:left; line-height:1.25; transition:all .15s; cursor:pointer; }
+    .chip.active { border-color:#2563eb; background:#eff6ff; color:#1e3a8a; box-shadow:0 0 0 3px rgba(37,99,235,.15); }
+    .chip .chip-check { width:18px; height:18px; border-radius:6px; border:2px solid #cbd5e1; display:inline-flex; align-items:center; justify-content:center; font-size:10px; color:transparent; transition:all .15s; flex-shrink:0; }
+    .chip.active .chip-check { background:#2563eb; border-color:#2563eb; color:#ffffff; }
+    .urg-btn { display:flex; flex-direction:column; align-items:center; gap:0; padding:8px 4px; border-radius:14px; border:2px solid #e2e8f0; background:#fff; font-size:16px; line-height:1.2; transition:all .15s; }
+    .urg-btn span { font-size:11px; font-weight:800; color:#1e293b; }
+    .urg-btn small { font-size:9px; color:#64748b; }
+    .urg-btn.active[data-value="Alta"] { border-color:#ef4444; background:#fef2f2; }
+    .urg-btn.active[data-value="Media"] { border-color:#f59e0b; background:#fffbeb; }
+    .urg-btn.active[data-value="Bassa"] { border-color:#10b981; background:#ecfdf5; }
+    .ios-wallpaper {
+      background: radial-gradient(circle at 20% 25%, #6366f1 0%, transparent 48%),
+                  radial-gradient(circle at 80% 30%, #ec4899 0%, transparent 45%),
+                  radial-gradient(circle at 50% 75%, #0ea5e9 0%, transparent 55%),
+                  linear-gradient(160deg, #1e1b4b 0%, #312e81 45%, #0f172a 100%);
+    }
+    .ios-squircle {
+      border-radius: 15px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+    }
+    .ios-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: #ffffff;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75);
+      letter-spacing: -0.01em;
+    }
+    @keyframes pulseRing {
+      0% { transform: scale(0.95); opacity: 0.9; }
+      70% { transform: scale(1.22); opacity: 0; }
+      100% { transform: scale(1.22); opacity: 0; }
+    }
+    .icon-pulse::after {
+      content: '';
+      position: absolute;
+      inset: -5px;
+      border-radius: 19px;
+      border: 2.5px solid #fbbf24;
+      animation: pulseRing 2s infinite;
+      pointer-events: none;
+    }
+    @keyframes pwaZoomIn {
+      0% { opacity: 0; transform: scale(0.82); border-radius: 36px; }
+      100% { opacity: 1; transform: scale(1); border-radius: 0; }
+    }
+    .pwa-launch-anim {
+      animation: pwaZoomIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    #map { height: 430px; width: 100%; border-radius: 12px; z-index: 1; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- TOAST NOTIFICATION BANNER (Sostituisce alert()) -->
+  <div id="toastBanner" class="fixed bottom-5 right-5 z-[100] hidden max-w-sm bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl border border-slate-700 flex items-start gap-3 transition-all">
+    <span id="toastIcon" class="text-base mt-0.5">✅</span>
+    <div class="flex-1 text-xs leading-relaxed" id="toastMessage">Notifica</div>
+    <button onclick="hideToast()" class="text-slate-400 hover:text-white text-xs font-bold">✕</button>
+  </div>
+
+  <!-- TOP NAVBAR -->
+  <header class="bg-[#1B365D] text-white shadow-md sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgdmlld0JveD0iMjAuNSAyOCA0MDAgNDAwIj4KPHJlY3QgeD0iLTQ0LjIiIHk9Ii00Ny44IiB3aWR0aD0iNTMwLjQiIGhlaWdodD0iNTczLjYiIGZpbGw9InJnYigxLjE3NjQ1MyUsIDEuMTc2NDUzJSwgNDEuOTYwMTQ0JSkiIGZpbGwtb3BhY2l0eT0iMSIvPgo8cGF0aCBmaWxsLXJ1bGU9Im5vbnplcm8iIGZpbGw9InJnYigxMDAlLCAxMDAlLCAxMDAlKSIgZmlsbC1vcGFjaXR5PSIxIiBzdHJva2Utd2lkdGg9IjE3IiBzdHJva2UtbGluZWNhcD0iYnV0dCIgc3Ryb2tlLWxpbmVqb2luPSJtaXRlciIgc3Ryb2tlPSJyZ2IoMTAwJSwgMTAwJSwgMTAwJSkiIHN0cm9rZS1vcGFjaXR5PSIxIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiIGQ9Ik0gNzkuNjc1NzgxIDE5OS4yMDcwMzEgTCAyMDkuNDQ5MjE5IDk2LjcxODc1IEMgMjE4Ljg2NzE4OCA4OS4yODEyNSAyMzIuMTkxNDA2IDg5LjM4MjgxMiAyNDEuNDk2MDk0IDk2Ljk2ODc1IEwgMzYyLjkyOTY4OCAxOTUuOTY0ODQ0IEMgMzY5LjgzOTg0NCAyMDEuNjAxNTYyIDM3My4xOTUzMTIgMjEwLjUxMTcxOSAzNzEuNzE0ODQ0IDIxOS4zMDA3ODEgQyAzNzAuNjcxODc1IDIyNS41MDM5MDYgMzYzLjIyMjY1NiAyMjguMTQwNjI1IDM1OC41MDc4MTIgMjIzLjk4MDQ2OSBMIDI0Mi4zMDQ2ODggMTIxLjQ0MTQwNiBDIDIzMi43MTQ4NDQgMTEyLjk3NjU2MiAyMTguMzUxNTYyIDExMi44OTA2MjUgMjA4LjY2MDE1NiAxMjEuMjM0Mzc1IEwgODUuMzY3MTg4IDIyNy4zNzUgQyA3OS41MzUxNTYgMjMyLjM5ODQzOCA3MC40NzI2NTYgMjI4LjU4MjAzMSA2OS45OTIxODggMjIwLjg5ODQzOCBDIDY5LjQ2ODc1IDIxMi41MTU2MjUgNzMuMDg1OTM4IDIwNC40MTAxNTYgNzkuNjc1NzgxIDE5OS4yMDcwMzEgWiBNIDc5LjY3NTc4MSAxOTkuMjA3MDMxICIvPgo8cGF0aCBmaWxsLXJ1bGU9Im5vbnplcm8iIGZpbGw9InJnYigxMDAlLCA4MS45NTk1MzQlLCA1LjA5Nzk2MSUpIiBmaWxsLW9wYWNpdHk9IjEiIGQ9Ik0gMjIxLjE0ODQzOCAxNzkuNjk1MzEyIEwgMjI0LjIwNzAzMSAxNzkuNzAzMTI1IEMgMjMzLjg5NDUzMSAxNzkuNzM0Mzc1IDI0MS41MzUxNTYgMTg3Ljk0OTIxOSAyNDAuODYzMjgxIDE5Ny42MTMyODEgTCAyMzQuMjgxMjUgMjkyLjQyOTY4OCBDIDIzMy44MjQyMTkgMjk5LjAwNzgxMiAyMjguMzQ3NjU2IDMwNC4xMDkzNzUgMjIxLjc1MzkwNiAzMDQuMTAxNTYyIEMgMjE1LjE4MzU5NCAzMDQuMDkzNzUgMjA5Ljc2NTYyNSAyOTguOTUzMTI1IDIwOS40MTc5NjkgMjkyLjM5MDYyNSBMIDIwNC4zNzEwOTQgMTk3LjMzMjAzMSBDIDIwMy44NTkzNzUgMTg3LjcyNjU2MiAyMTEuNTI3MzQ0IDE3OS42NjQwNjIgMjIxLjE0ODQzOCAxNzkuNjk1MzEyIFogTSAyMjEuMTQ4NDM4IDE3OS42OTUzMTIgIi8+CjxwYXRoIGZpbGwtcnVsZT0ibm9uemVybyIgZmlsbD0icmdiKDEwMCUsIDgxLjk1OTUzNCUsIDUuMDk3OTYxJSkiIGZpbGwtb3BhY2l0eT0iMSIgZD0iTSAxOTUuOTY4NzUgMzQ4LjExMzI4MSBDIDE5NS45Njg3NSAzMzQuNDE3OTY5IDIwNy40ODgyODEgMzIzLjMxNjQwNiAyMjEuNjk1MzEyIDMyMy4zMTY0MDYgQyAyMzUuOTA2MjUgMzIzLjMxNjQwNiAyNDcuNDIxODc1IDMzNC40MTc5NjkgMjQ3LjQyMTg3NSAzNDguMTEzMjgxIEMgMjQ3LjQyMTg3NSAzNjEuODA4NTk0IDIzNS45MDYyNSAzNzIuOTEwMTU2IDIyMS42OTUzMTIgMzcyLjkxMDE1NiBDIDIwNy40ODgyODEgMzcyLjkxMDE1NiAxOTUuOTY4NzUgMzYxLjgwODU5NCAxOTUuOTY4NzUgMzQ4LjExMzI4MSBaIE0gMTk1Ljk2ODc1IDM0OC4xMTMyODEgIi8+Cjwvc3ZnPgo=" alt="Logo STEP Roma" class="w-9 h-9 rounded-xl object-cover shadow-inner ring-1 ring-white/25 shrink-0" />
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="font-bold text-base sm:text-lg tracking-tight">STEP Roma</h1>
+            <span class="text-[10px] uppercase font-bold tracking-wider bg-blue-800/80 text-blue-200 px-2 py-0.5 rounded-full border border-blue-600/50">Laboratorio SUMI</span>
+          </div>
+          <p class="text-xs text-slate-300 hidden sm:block">Segnalazione, Triage, Emergenza di Prossimità — Area Metropolitana di Roma</p>
+        </div>
+      </div>
+
+      <!-- RBAC Role Selector -->
+      <div class="flex items-center gap-2 bg-slate-900/50 px-2.5 py-1.5 rounded-lg border border-slate-700/70">
+        <span class="text-[11px] text-slate-300 font-medium hidden md:inline">Vista RBAC:</span>
+        <select id="rbacSelector" onchange="changeRole(this.value)" class="bg-slate-800 text-white text-xs font-semibold rounded px-2 py-1 border border-slate-600 focus:outline-none">
+          <option value="demo">Modalità Demo Aula (3 Strati)</option>
+          <option value="citizen">Solo Cittadino (PWA Reale)</option>
+          <option value="sos">Solo Centrale SOS (Back-office)</option>
+          <option value="unit">Solo Unità Mobile (CRI / PC)</option>
+        </select>
+      </div>
+
+      <!-- Layer Navigation Tabs -->
+      <nav id="layerTabs" class="flex items-center gap-1.5 bg-slate-900/40 p-1 rounded-xl">
+        <button onclick="switchTab(1)" id="tabBtn1" class="px-3 py-1.5 rounded-lg text-xs font-bold transition bg-white text-[#1B365D] shadow">
+          1. Segnalazione
+        </button>
+        <button onclick="switchTab(2)" id="tabBtn2" class="px-3 py-1.5 rounded-lg text-xs font-bold transition text-slate-200 hover:bg-white/10 flex items-center gap-1.5">
+          2. Triage SOS <span id="badgePending" class="bg-amber-500 text-slate-950 text-[10px] px-1.5 py-0.2 rounded-full font-extrabold">2</span>
+        </button>
+        <button onclick="switchTab(3)" id="tabBtn3" class="px-3 py-1.5 rounded-lg text-xs font-bold transition text-slate-200 hover:bg-white/10 flex items-center gap-1.5">
+          3. Unità Mobili <span id="badgeActive" class="bg-emerald-400 text-slate-950 text-[10px] px-1.5 py-0.2 rounded-full font-extrabold">3</span>
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
+
+    <!-- ==================== TAB 1: SEGNALAZIONE (PWA + HOME SCREEN) ==================== -->
+    <section id="view1" class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+
+      <!-- Left Column: Guided Walkthrough & Civic Context -->
+      <div class="lg:col-span-6 space-y-5">
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+          <span class="inline-block text-[11px] font-extrabold uppercase tracking-wider text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-md mb-3">
+            FRONT-END CIVICO
+          </span>
+          <h2 class="text-2xl font-extrabold text-slate-900 tracking-tight mb-2">
+            Dalla Schermata Home all'invio in 45 secondi
+          </h2>
+          <p class="text-sm text-slate-600 leading-relaxed mb-5">
+            STEP Roma è progettata come <strong>Progressive Web App (PWA)</strong>: non richiede download dagli store, si apre istantaneamente via <strong>QR Code urbano</strong> (pensiline ATAC, stazioni Metro) e si integra nella schermata Home del cellulare dell'utente come un'app nativa.
+          </p>
+
+          <!-- Interactive 3-Step Launcher Bar -->
+          <div class="bg-slate-50 rounded-xl p-4 border border-slate-200 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold uppercase tracking-wider text-slate-700">Demo del flusso</span>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2">
+              <button onclick="setPhoneStep(0)" id="stepPill0" class="py-2 px-2 rounded-lg text-xs font-bold border-2 border-[#1B365D] bg-[#1B365D] text-white transition text-center">
+                Step 0: Home
+              </button>
+              <button onclick="launchPwaFromHome()" id="stepPill1" class="py-2 px-2 rounded-lg text-xs font-bold border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 transition text-center">
+                Step 1: Transizione PWA
+              </button>
+              <button onclick="setPhoneStep(2)" id="stepPill2" class="py-2 px-2 rounded-lg text-xs font-bold border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 transition text-center">
+                Step 2: Segnalazione
+              </button>
+            </div>
+
+            <ol class="text-xs text-slate-600 space-y-1.5 pt-1 list-decimal list-inside">
+              <li><strong>Step 0 (schermata Home):</strong> tocca l'icona <strong>STEP Roma</strong> nella schermata Home oppure simula la scansione di un QR Code.</li>
+              <li><strong>Step 1 (Transizione fluida):</strong> osserva l'apertura a schermo intero senza barra del browser e l'acquisizione immediata del GPS.</li>
+              <li><strong>Step 2 (Flusso segnalazione):</strong> inserisci i tuoi dati (<strong>Nome, Cognome, Cellulare</strong>), verifica il codice <strong>OTP</strong> e invia il ticket alla Centrale SOS.</li>
+            </ol>
+          </div>
+        </div>
+
+        <!-- Competitive Benchmark Table: STEP Roma vs Helpinet -->
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+          <span class="inline-block text-[11px] font-extrabold uppercase tracking-wider text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-md mb-3">
+            Benchmark operativo
+          </span>
+          <h2 class="text-2xl font-extrabold text-slate-900 tracking-tight mb-4">
+            Perché STEP Roma è la soluzione
+          </h2>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs text-left border-collapse">
+              <thead>
+                <tr class="bg-[#1B365D] text-white">
+                  <th class="p-2.5 rounded-tl-lg">Dimensione</th>
+                  <th class="p-2.5">Helpinet (Stato dell'arte)</th>
+                  <th class="p-2.5 rounded-tr-lg">STEP Roma (Innovazione di processo)</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-200">
+                <tr class="bg-slate-50">
+                  <td class="p-2.5 font-bold text-slate-800">Frizione d'ingresso</td>
+                  <td class="p-2.5 text-slate-600">Richiede download app nativa e registrazione completa.</td>
+                  <td class="p-2.5 font-semibold text-blue-900">PWA istantanea + QR Code urbano + verifica rapida OTP.</td>
+                </tr>
+                <tr>
+                  <td class="p-2.5 font-bold text-slate-800">Segnalazioni multiple</td>
+                  <td class="p-2.5 text-slate-600">Genera notifiche duplicate sullo stesso soggetto.</td>
+                  <td class="p-2.5 font-semibold text-blue-900">Clustering spaziale in centrale (misurato dall'indice IDD).</td>
+                </tr>
+                <tr class="bg-slate-50">
+                  <td class="p-2.5 font-bold text-slate-800">Privacy (GDPR)</td>
+                  <td class="p-2.5 text-slate-600">Visibilità aperta tra utenti della rete volontaristica.</td>
+                  <td class="p-2.5 font-semibold text-blue-900">RBAC rigoroso: mappa riservata solo ad enti accreditati.</td>
+                </tr>
+                <tr>
+                  <td class="p-2.5 font-bold text-slate-800">Governance & KPI</td>
+                  <td class="p-2.5 text-slate-600">Rete spontanea senza metriche operative centralizzate.</td>
+                  <td class="p-2.5 font-semibold text-blue-900">Integrazione con Sala Operativa Sociale, CRI e Protezione Civile.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Interactive iPhone Frame -->
+      <div class="lg:col-span-6 flex flex-col items-center lg:sticky lg:top-20 lg:self-start">
+        <div class="phone-frame">
+
+          <!-- Dynamic Island / Notch -->
+          <div class="absolute top-2.5 left-1/2 -translate-x-1/2 w-24 h-5 bg-black rounded-full z-30 flex items-center justify-end px-2">
+            <span class="w-2 h-2 rounded-full bg-slate-800 border border-slate-700"></span>
+          </div>
+
+          <!-- ==================== STEP 0: IPHONE HOME SCREEN ==================== -->
+          <div id="phoneScreen0" class="w-full h-full ios-wallpaper flex flex-col justify-between pt-3 pb-4 px-5 select-none relative">
+            <!-- iOS Status Bar -->
+            <div class="flex items-center justify-between text-white text-[11px] font-semibold px-1">
+              <span>9:41</span>
+              <div class="flex items-center gap-1.5">
+                <span>5G</span>
+                <div class="w-5 h-2.5 border border-white/80 rounded-[3px] p-[1px] flex items-center">
+                  <div class="w-full h-full bg-white rounded-[1px]"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- iOS App Grid (6 rows x 4 cols matching your iPhone layout) -->
+            <div class="grid grid-cols-4 gap-x-3.5 gap-y-4 mt-4">
+              <!-- Row 1 -->
+              <div class="flex flex-col items-center gap-1">
+                <div class="w-14 h-14 ios-squircle bg-emerald-500 flex items-center justify-center text-white text-2xl">📹</div>
+                <span class="ios-label">FaceTime</span>
+              </div>
+              <div class="flex flex-col items-center gap-1">
+                <div class="w-14 h-14 ios-squircle bg-white flex flex-col items-center justify-center">
+                  <span class="text-[9px] font-bold text-red-500 uppercase leading-none">Mar</span>
+                  <span class="text-xl font-light text-slate-900 leading-tight">24</span>
+                </div>
+                <span class="ios-label">Calendario</span>
+              </div>
+              <div class="flex flex-col items-center gap-1">
+                <div class="w-14 h-14 ios-squircle bg-slate-900 flex items-center justify-center text-white text-2xl">🕒</div>
+                <span class="ios-label">Orologio</span>
+              </div>
+              <div class="flex flex-col items-center gap-1">
+                <div class="w-14 h-14 ios-squircle bg-white flex items-center justify-center text-2xl">🌸</div>
+                <span class="ios-label">Foto</span>
+              </div>
+
+              <!-- Row 2 -->
+              <div class="flex flex-col items-center gap-1">
+                <div class="w-14 h-14 ios-squircle bg-slate-300 flex items-center justify-center text-slate-800 text-2xl">📷</div>
+                <span class="ios-label">Fotocamera</span>
+              </div>
+              <div class="flex flex-col items-center gap-1">
+                <div class="w-14 h-14 ios-squircle bg-blue-500 flex items-center justify-center text-white font-black text-xl">A</div>
+                <span class="ios-label">App Store</span>
+              </div>
+              <div class="flex flex-col items-center gap-1">
+                <div class="w-14 h-14 ios-squircle bg-white flex items-center justify-center text-blue-600 text-2xl">✦</div>
+                <span class="ios-label">Gemini</span>
+              </div>
+              <div class="flex flex-col items-center gap-1">
+                <div class="w-14 h-14 ios-squircle bg-white overflow-hidden flex flex-col">
+                  <div class="h-3.5 bg-amber-400 w-full"></div>
+                  <div class="flex-1 flex items-center justify-center text-slate-400 text-xs">≡</div>
+                </div>
+                <span class="ios-label">Note</span>
+              </div>
+
+              <!-- Row 3 -->
+              <div class="flex flex-col items-center gap-1">
+                <div class="w-14 h-14 ios-squircle bg-slate-500 flex items-center justify-center text-white text-2xl">⚙️</div>
+                <span class="ios-label">Impostazioni</span>
+              </div>
+              <div class="flex flex-col items-center gap-1">
+                <div class="w-14 h-14 ios-squircle bg-white/20 backdrop-blur-md p-1.5 grid grid-cols-2 gap-1">
+                  <div class="bg-blue-600 rounded-sm"></div><div class="bg-slate-900 rounded-sm"></div>
+                  <div class="bg-amber-400 rounded-sm"></div><div class="bg-emerald-500 rounded-sm"></div>
+                </div>
+                <span class="ios-label">Finanza</span>
+              </div>
+              <div class="flex flex-col items-center gap-1">
+                <div class="w-14 h-14 ios-squircle bg-white/20 backdrop-blur-md p-1.5 grid grid-cols-2 gap-1">
+                  <div class="bg-sky-500 rounded-sm"></div><div class="bg-indigo-500 rounded-sm"></div>
+                  <div class="bg-blue-700 rounded-sm"></div><div class="bg-teal-500 rounded-sm"></div>
+                </div>
+                <span class="ios-label">Business</span>
+              </div>
+              <div class="flex flex-col items-center gap-1">
+                <div class="w-14 h-14 ios-squircle bg-white/20 backdrop-blur-md p-1.5 grid grid-cols-2 gap-1">
+                  <div class="bg-red-500 rounded-sm"></div><div class="bg-yellow-400 rounded-sm"></div>
+                  <div class="bg-green-500 rounded-sm"></div><div class="bg-blue-500 rounded-sm"></div>
+                </div>
+                <span class="ios-label">Google</span>
+              </div>
+
+              <!-- Row 4 -->
+              <div class="flex flex-col items-center gap-1">
+                <div class="w-14 h-14 ios-squircle bg-zinc-900 flex items-center justify-center text-white font-bold text-lg">♪</div>
+                <span class="ios-label">TikTok</span>
+              </div>
+              <div class="flex flex-col items-center gap-1">
+                <div class="w-14 h-14 ios-squircle bg-green-500 flex items-center justify-center text-white text-2xl">💬</div>
+                <span class="ios-label">WhatsApp</span>
+              </div>
+              <div class="flex flex-col items-center gap-1">
+                <div class="w-14 h-14 ios-squircle bg-gradient-to-tr from-amber-500 via-pink-500 to-purple-600 flex items-center justify-center text-white text-2xl">📸</div>
+                <span class="ios-label">Instagram</span>
+              </div>
+              <div class="flex flex-col items-center gap-1">
+                <div class="w-14 h-14 ios-squircle bg-sky-500 flex items-center justify-center text-white text-2xl">✈️</div>
+                <span class="ios-label">Telegram</span>
+              </div>
+
+              <!-- Row 5 -->
+              <div class="flex flex-col items-center gap-1">
+                <div class="w-14 h-14 ios-squircle bg-purple-600 flex items-center justify-center text-white text-2xl">🎙️</div>
+                <span class="ios-label">Podcast</span>
+              </div>
+              <div class="flex flex-col items-center gap-1">
+                <div class="w-14 h-14 ios-squircle bg-[#15803d] flex items-center justify-center text-white font-extrabold text-xs tracking-tighter border border-emerald-400/30">
+                  UTV
+                </div>
+                <span class="ios-label">Easyutv</span>
+              </div>
+
+              <!-- STEP ROMA PWA ICON (Interactive, Apple-style next to Easyutv) -->
+              <button onclick="launchPwaFromHome(false)" class="flex flex-col items-center gap-1 group focus:outline-none cursor-pointer relative" title="Tocca per avviare la PWA STEP Roma">
+                <div class="w-14 h-14 ios-squircle bg-[#03036B] flex items-center justify-center relative icon-pulse group-hover:scale-105 transition-transform">
+                  <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgdmlld0JveD0iMjAuNSAyOCA0MDAgNDAwIj4KPHJlY3QgeD0iLTQ0LjIiIHk9Ii00Ny44IiB3aWR0aD0iNTMwLjQiIGhlaWdodD0iNTczLjYiIGZpbGw9InJnYigxLjE3NjQ1MyUsIDEuMTc2NDUzJSwgNDEuOTYwMTQ0JSkiIGZpbGwtb3BhY2l0eT0iMSIvPgo8cGF0aCBmaWxsLXJ1bGU9Im5vbnplcm8iIGZpbGw9InJnYigxMDAlLCAxMDAlLCAxMDAlKSIgZmlsbC1vcGFjaXR5PSIxIiBzdHJva2Utd2lkdGg9IjE3IiBzdHJva2UtbGluZWNhcD0iYnV0dCIgc3Ryb2tlLWxpbmVqb2luPSJtaXRlciIgc3Ryb2tlPSJyZ2IoMTAwJSwgMTAwJSwgMTAwJSkiIHN0cm9rZS1vcGFjaXR5PSIxIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiIGQ9Ik0gNzkuNjc1NzgxIDE5OS4yMDcwMzEgTCAyMDkuNDQ5MjE5IDk2LjcxODc1IEMgMjE4Ljg2NzE4OCA4OS4yODEyNSAyMzIuMTkxNDA2IDg5LjM4MjgxMiAyNDEuNDk2MDk0IDk2Ljk2ODc1IEwgMzYyLjkyOTY4OCAxOTUuOTY0ODQ0IEMgMzY5LjgzOTg0NCAyMDEuNjAxNTYyIDM3My4xOTUzMTIgMjEwLjUxMTcxOSAzNzEuNzE0ODQ0IDIxOS4zMDA3ODEgQyAzNzAuNjcxODc1IDIyNS41MDM5MDYgMzYzLjIyMjY1NiAyMjguMTQwNjI1IDM1OC41MDc4MTIgMjIzLjk4MDQ2OSBMIDI0Mi4zMDQ2ODggMTIxLjQ0MTQwNiBDIDIzMi43MTQ4NDQgMTEyLjk3NjU2MiAyMTguMzUxNTYyIDExMi44OTA2MjUgMjA4LjY2MDE1NiAxMjEuMjM0Mzc1IEwgODUuMzY3MTg4IDIyNy4zNzUgQyA3OS41MzUxNTYgMjMyLjM5ODQzOCA3MC40NzI2NTYgMjI4LjU4MjAzMSA2OS45OTIxODggMjIwLjg5ODQzOCBDIDY5LjQ2ODc1IDIxMi41MTU2MjUgNzMuMDg1OTM4IDIwNC40MTAxNTYgNzkuNjc1NzgxIDE5OS4yMDcwMzEgWiBNIDc5LjY3NTc4MSAxOTkuMjA3MDMxICIvPgo8cGF0aCBmaWxsLXJ1bGU9Im5vbnplcm8iIGZpbGw9InJnYigxMDAlLCA4MS45NTk1MzQlLCA1LjA5Nzk2MSUpIiBmaWxsLW9wYWNpdHk9IjEiIGQ9Ik0gMjIxLjE0ODQzOCAxNzkuNjk1MzEyIEwgMjI0LjIwNzAzMSAxNzkuNzAzMTI1IEMgMjMzLjg5NDUzMSAxNzkuNzM0Mzc1IDI0MS41MzUxNTYgMTg3Ljk0OTIxOSAyNDAuODYzMjgxIDE5Ny42MTMyODEgTCAyMzQuMjgxMjUgMjkyLjQyOTY4OCBDIDIzMy44MjQyMTkgMjk5LjAwNzgxMiAyMjguMzQ3NjU2IDMwNC4xMDkzNzUgMjIxLjc1MzkwNiAzMDQuMTAxNTYyIEMgMjE1LjE4MzU5NCAzMDQuMDkzNzUgMjA5Ljc2NTYyNSAyOTguOTUzMTI1IDIwOS40MTc5NjkgMjkyLjM5MDYyNSBMIDIwNC4zNzEwOTQgMTk3LjMzMjAzMSBDIDIwMy44NTkzNzUgMTg3LjcyNjU2MiAyMTEuNTI3MzQ0IDE3OS42NjQwNjIgMjIxLjE0ODQzOCAxNzkuNjk1MzEyIFogTSAyMjEuMTQ4NDM4IDE3OS42OTUzMTIgIi8+CjxwYXRoIGZpbGwtcnVsZT0ibm9uemVybyIgZmlsbD0icmdiKDEwMCUsIDgxLjk1OTUzNCUsIDUuMDk3OTYxJSkiIGZpbGwtb3BhY2l0eT0iMSIgZD0iTSAxOTUuOTY4NzUgMzQ4LjExMzI4MSBDIDE5NS45Njg3NSAzMzQuNDE3OTY5IDIwNy40ODgyODEgMzIzLjMxNjQwNiAyMjEuNjk1MzEyIDMyMy4zMTY0MDYgQyAyMzUuOTA2MjUgMzIzLjMxNjQwNiAyNDcuNDIxODc1IDMzNC40MTc5NjkgMjQ3LjQyMTg3NSAzNDguMTEzMjgxIEMgMjQ3LjQyMTg3NSAzNjEuODA4NTk0IDIzNS45MDYyNSAzNzIuOTEwMTU2IDIyMS42OTUzMTIgMzcyLjkxMDE1NiBDIDIwNy40ODgyODEgMzcyLjkxMDE1NiAxOTUuOTY4NzUgMzYxLjgwODU5NCAxOTUuOTY4NzUgMzQ4LjExMzI4MSBaIE0gMTk1Ljk2ODc1IDM0OC4xMTMyODEgIi8+Cjwvc3ZnPgo=" alt="STEP Roma" class="w-full h-full object-cover" style="border-radius:inherit" draggable="false" />
+                  <span class="opacity-0 group-hover:opacity-100 transition bg-slate-900/95 text-amber-300 text-[9px] font-extrabold px-2 py-0.5 rounded-md shadow-lg absolute -top-6 whitespace-nowrap border border-amber-400/40">
+                    Tocca per aprire
+                  </span>
+                </div>
+                <span class="ios-label">STEP Roma</span>
+              </button>
+
+              <!-- Empty slot 4 -->
+              <div></div>
+            </div>
+
+            <!-- Quick QR Scan Trigger + iOS Dock -->
+            <div class="space-y-3">
+              <div class="flex justify-center">
+                <button onclick="launchPwaFromHome(true)" class="bg-slate-900/80 hover:bg-slate-900 backdrop-blur-md text-white text-[11px] font-bold px-3.5 py-1.5 rounded-full border border-white/25 shadow-lg flex items-center gap-1.5 transition">
+                  <span>📷</span> Simula scansione QR Code
+                </button>
+              </div>
+
+              <!-- iOS Dock -->
+              <div class="bg-white/20 backdrop-blur-xl rounded-[26px] p-2.5 grid grid-cols-4 gap-3 border border-white/15">
+                <div class="w-13 h-13 aspect-square ios-squircle bg-green-500 flex items-center justify-center text-white text-xl">📞</div>
+                <div class="w-13 h-13 aspect-square ios-squircle bg-white flex items-center justify-center text-blue-500 text-xl">🧭</div>
+                <div class="w-13 h-13 aspect-square ios-squircle bg-emerald-500 flex items-center justify-center text-white text-xl">💭</div>
+                <div class="w-13 h-13 aspect-square ios-squircle bg-rose-500 flex items-center justify-center text-white text-xl">🎵</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ==================== STEP 1: PWA FLUID TRANSITION / SPLASH ==================== -->
+          <div id="phoneScreen1" class="hidden w-full h-full bg-gradient-to-b from-[#162E52] via-[#1B365D] to-blue-700 text-white flex flex-col items-center justify-center p-6 text-center pwa-launch-anim">
+            <div class="w-20 h-20 rounded-[22px] overflow-hidden bg-[#03036B] border border-white/30 flex items-center justify-center mb-5 shadow-2xl">
+              <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgdmlld0JveD0iMjAuNSAyOCA0MDAgNDAwIj4KPHJlY3QgeD0iLTQ0LjIiIHk9Ii00Ny44IiB3aWR0aD0iNTMwLjQiIGhlaWdodD0iNTczLjYiIGZpbGw9InJnYigxLjE3NjQ1MyUsIDEuMTc2NDUzJSwgNDEuOTYwMTQ0JSkiIGZpbGwtb3BhY2l0eT0iMSIvPgo8cGF0aCBmaWxsLXJ1bGU9Im5vbnplcm8iIGZpbGw9InJnYigxMDAlLCAxMDAlLCAxMDAlKSIgZmlsbC1vcGFjaXR5PSIxIiBzdHJva2Utd2lkdGg9IjE3IiBzdHJva2UtbGluZWNhcD0iYnV0dCIgc3Ryb2tlLWxpbmVqb2luPSJtaXRlciIgc3Ryb2tlPSJyZ2IoMTAwJSwgMTAwJSwgMTAwJSkiIHN0cm9rZS1vcGFjaXR5PSIxIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiIGQ9Ik0gNzkuNjc1NzgxIDE5OS4yMDcwMzEgTCAyMDkuNDQ5MjE5IDk2LjcxODc1IEMgMjE4Ljg2NzE4OCA4OS4yODEyNSAyMzIuMTkxNDA2IDg5LjM4MjgxMiAyNDEuNDk2MDk0IDk2Ljk2ODc1IEwgMzYyLjkyOTY4OCAxOTUuOTY0ODQ0IEMgMzY5LjgzOTg0NCAyMDEuNjAxNTYyIDM3My4xOTUzMTIgMjEwLjUxMTcxOSAzNzEuNzE0ODQ0IDIxOS4zMDA3ODEgQyAzNzAuNjcxODc1IDIyNS41MDM5MDYgMzYzLjIyMjY1NiAyMjguMTQwNjI1IDM1OC41MDc4MTIgMjIzLjk4MDQ2OSBMIDI0Mi4zMDQ2ODggMTIxLjQ0MTQwNiBDIDIzMi43MTQ4NDQgMTEyLjk3NjU2MiAyMTguMzUxNTYyIDExMi44OTA2MjUgMjA4LjY2MDE1NiAxMjEuMjM0Mzc1IEwgODUuMzY3MTg4IDIyNy4zNzUgQyA3OS41MzUxNTYgMjMyLjM5ODQzOCA3MC40NzI2NTYgMjI4LjU4MjAzMSA2OS45OTIxODggMjIwLjg5ODQzOCBDIDY5LjQ2ODc1IDIxMi41MTU2MjUgNzMuMDg1OTM4IDIwNC40MTAxNTYgNzkuNjc1NzgxIDE5OS4yMDcwMzEgWiBNIDc5LjY3NTc4MSAxOTkuMjA3MDMxICIvPgo8cGF0aCBmaWxsLXJ1bGU9Im5vbnplcm8iIGZpbGw9InJnYigxMDAlLCA4MS45NTk1MzQlLCA1LjA5Nzk2MSUpIiBmaWxsLW9wYWNpdHk9IjEiIGQ9Ik0gMjIxLjE0ODQzOCAxNzkuNjk1MzEyIEwgMjI0LjIwNzAzMSAxNzkuNzAzMTI1IEMgMjMzLjg5NDUzMSAxNzkuNzM0Mzc1IDI0MS41MzUxNTYgMTg3Ljk0OTIxOSAyNDAuODYzMjgxIDE5Ny42MTMyODEgTCAyMzQuMjgxMjUgMjkyLjQyOTY4OCBDIDIzMy44MjQyMTkgMjk5LjAwNzgxMiAyMjguMzQ3NjU2IDMwNC4xMDkzNzUgMjIxLjc1MzkwNiAzMDQuMTAxNTYyIEMgMjE1LjE4MzU5NCAzMDQuMDkzNzUgMjA5Ljc2NTYyNSAyOTguOTUzMTI1IDIwOS40MTc5NjkgMjkyLjM5MDYyNSBMIDIwNC4zNzEwOTQgMTk3LjMzMjAzMSBDIDIwMy44NTkzNzUgMTg3LjcyNjU2MiAyMTEuNTI3MzQ0IDE3OS42NjQwNjIgMjIxLjE0ODQzOCAxNzkuNjk1MzEyIFogTSAyMjEuMTQ4NDM4IDE3OS42OTUzMTIgIi8+CjxwYXRoIGZpbGwtcnVsZT0ibm9uemVybyIgZmlsbD0icmdiKDEwMCUsIDgxLjk1OTUzNCUsIDUuMDk3OTYxJSkiIGZpbGwtb3BhY2l0eT0iMSIgZD0iTSAxOTUuOTY4NzUgMzQ4LjExMzI4MSBDIDE5NS45Njg3NSAzMzQuNDE3OTY5IDIwNy40ODgyODEgMzIzLjMxNjQwNiAyMjEuNjk1MzEyIDMyMy4zMTY0MDYgQyAyMzUuOTA2MjUgMzIzLjMxNjQwNiAyNDcuNDIxODc1IDMzNC40MTc5NjkgMjQ3LjQyMTg3NSAzNDguMTEzMjgxIEMgMjQ3LjQyMTg3NSAzNjEuODA4NTk0IDIzNS45MDYyNSAzNzIuOTEwMTU2IDIyMS42OTUzMTIgMzcyLjkxMDE1NiBDIDIwNy40ODgyODEgMzcyLjkxMDE1NiAxOTUuOTY4NzUgMzYxLjgwODU5NCAxOTUuOTY4NzUgMzQ4LjExMzI4MSBaIE0gMTk1Ljk2ODc1IDM0OC4xMTMyODEgIi8+Cjwvc3ZnPgo=" alt="STEP Roma" class="w-full h-full object-cover" draggable="false" />
+            </div>
+            <h3 class="text-2xl font-extrabold tracking-tight">STEP Roma</h3>
+            <p class="text-xs text-blue-100 mt-1 mb-6">Progressive Web App</p>
+            <div class="w-44 h-1.5 bg-blue-950/60 rounded-full overflow-hidden">
+              <div id="splashBar" class="h-full bg-amber-400 w-1/4 transition-all duration-700"></div>
+            </div>
+            <p id="splashCaption" class="text-[11px] text-blue-200 mt-3 font-medium">Acquisizione geolocalizzazione GPS...</p>
+          </div>
+
+          <!-- ==================== STEP 2: CITIZEN REPORTING FORM WITH OTP ==================== -->
+          <div id="phoneScreen2" class="hidden w-full h-full bg-slate-50 flex flex-col overflow-y-auto pwa-launch-anim">
+            <!-- PWA Standalone Header -->
+            <div class="bg-[#1B365D] text-white px-4 pt-9 pb-3 flex items-center justify-between sticky top-0 z-10 shadow">
+              <button onclick="setPhoneStep(0)" class="text-xs bg-white/15 hover:bg-white/25 px-2.5 py-1 rounded-lg font-semibold flex items-center gap-1" title="Torna alla Home iOS">
+                ← Home
+              </button>
+              <span class="font-extrabold text-sm tracking-tight">STEP Roma</span>
+              <span class="text-[10px] bg-emerald-500/20 text-emerald-200 border border-emerald-400/40 px-2 py-0.5 rounded-full font-bold">GPS Attivo</span>
+            </div>
+
+            <form id="reportForm" onsubmit="submitCitizenReport(event)" class="p-4 space-y-3.5 text-xs flex-1">
+              <div class="bg-blue-50 border border-blue-200 rounded-xl p-2.5 text-[11px] text-blue-900">
+                <strong>Segnalazione umanitaria:</strong> i dati sono trasmessi esclusivamente alla Sala Operativa Sociale. Vietate foto riconoscibili (GDPR).
+              </div>
+
+              <!-- CARD 1: Chi sei -->
+              <div class="bg-white rounded-2xl p-3.5 shadow-sm border border-slate-100 space-y-2.5">
+                <div class="flex items-center gap-2.5">
+                  <div class="w-8 h-8 rounded-xl bg-blue-100 flex items-center justify-center text-base">👤</div>
+                  <div>
+                    <p class="font-extrabold text-slate-900 text-[13px] leading-tight">Chi sei</p>
+                    <p class="text-[10px] text-slate-500">Serve solo a verificare la segnalazione</p>
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <div>
+                    <label class="block font-bold text-slate-700 mb-1">Nome *</label>
+                    <input type="text" id="citNome" required placeholder="Es. Marco" class="w-full px-3 py-2 rounded-xl bg-slate-100 border border-transparent focus:bg-white focus:border-blue-400 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label class="block font-bold text-slate-700 mb-1">Cognome *</label>
+                    <input type="text" id="citCognome" required placeholder="Es. Rossi" class="w-full px-3 py-2 rounded-xl bg-slate-100 border border-transparent focus:bg-white focus:border-blue-400 focus:outline-none" />
+                  </div>
+                </div>
+                <div>
+                  <label class="block font-bold text-slate-700 mb-1">Cellulare (verifica rapida tramite OTP) *</label>
+                  <div class="flex gap-1.5">
+                    <input type="tel" id="citPhone" required placeholder="+39 333 1234567" class="flex-1 min-w-0 px-3 py-2 rounded-xl bg-slate-100 border border-transparent focus:bg-white focus:border-blue-400 focus:outline-none" />
+                    <button type="button" onclick="sendSimulatedOtp()" class="px-3 py-2 rounded-xl bg-[#1B365D] hover:bg-blue-900 text-white font-bold whitespace-nowrap">Invia codice</button>
+                  </div>
+                </div>
+                <div id="otpBox" class="hidden bg-amber-50 border border-amber-200 rounded-xl p-2.5 space-y-2">
+                  <div class="flex items-center justify-between text-[11px]">
+                    <span class="font-bold text-amber-900">📩 SMS simulato: codice <span id="generatedOtpCode" class="underline font-mono text-sm">4829</span></span>
+                    <button type="button" onclick="autoFillOtp()" class="text-blue-700 font-bold underline">Compila</button>
+                  </div>
+                  <div class="flex gap-1.5">
+                    <input type="text" id="otpInput" maxlength="4" placeholder="4 cifre" class="flex-1 min-w-0 px-2.5 py-1.5 rounded-xl border border-amber-300 bg-white font-mono text-center font-bold tracking-widest" />
+                    <button type="button" onclick="verifyOtp()" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold">Verifica</button>
+                  </div>
+                </div>
+                <div id="otpVerifiedBadge" class="hidden text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 rounded-xl">
+                  ✓ Numero verificato, grazie!
+                </div>
+              </div>
+
+              <!-- CARD 2: Posizione rilevata -->
+              <div class="bg-white rounded-2xl p-3.5 shadow-sm border border-slate-100 space-y-2.5">
+                <div class="flex items-center gap-2.5">
+                  <div class="w-8 h-8 rounded-xl bg-emerald-100 flex items-center justify-center text-base">📍</div>
+                  <div>
+                    <p class="font-extrabold text-slate-900 text-[13px] leading-tight">Dove si trova</p>
+                    <p class="text-[10px] text-slate-500">Posizione rilevata automaticamente</p>
+                  </div>
+                </div>
+                <div class="rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2.5">
+                  <p class="text-[10px] font-bold uppercase tracking-wide text-emerald-700">Sei qui</p>
+                  <p id="locLabel" class="font-extrabold text-slate-900 text-[13px] leading-snug">Via Marsala 29 (Stazione Termini - Mun. I)</p>
+                </div>
+                <input type="text" id="citLocation" required value="Via Marsala 29 (Stazione Termini - Mun. I)" oninput="updateLocationLabel()" placeholder="Inserisci o modifica indirizzo..." class="w-full px-3 py-2.5 rounded-xl bg-slate-100 border border-transparent focus:bg-white focus:border-emerald-400 focus:outline-none font-medium text-slate-700" />
+                <p class="text-[10px] text-slate-400 px-1">Non è il posto giusto? Modificalo direttamente qui sopra.</p>
+              </div>
+
+              <!-- CARD 3: Bisogni percepiti (selezione multipla in elenco) -->
+              <div class="bg-white rounded-2xl p-3.5 shadow-sm border border-slate-100 space-y-2.5">
+                <div class="flex items-center gap-2.5">
+                  <div class="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center text-base">🧡</div>
+                  <div>
+                    <p class="font-extrabold text-slate-900 text-[13px] leading-tight">Di cosa ha bisogno</p>
+                    <p class="text-[10px] text-slate-500">Puoi selezionare anche più opzioni</p>
+                  </div>
+                </div>
+                <input type="hidden" id="citNeed" value="Coperte / Kit freddo" />
+                <div class="flex flex-col gap-2">
+                  <button type="button" data-value="Coperte / Kit freddo" onclick="toggleNeed(this)" class="need-chip chip active">
+                    <span class="flex items-center gap-2.5"><span class="text-base">🧣</span><span>Coperte e kit freddo</span></span>
+                    <span class="chip-check">✓</span>
+                  </button>
+                  <button type="button" data-value="Acqua / Generi alimentari" onclick="toggleNeed(this)" class="need-chip chip">
+                    <span class="flex items-center gap-2.5"><span class="text-base">🍲</span><span>Acqua e pasto caldo</span></span>
+                    <span class="chip-check">✓</span>
+                  </button>
+                  <button type="button" data-value="Assistenza sanitaria / Malore" onclick="toggleNeed(this)" class="need-chip chip">
+                    <span class="flex items-center gap-2.5"><span class="text-base">🩺</span><span>Malore o aiuto sanitario</span></span>
+                    <span class="chip-check">✓</span>
+                  </button>
+                  <button type="button" data-value="Riparo notturno" onclick="toggleNeed(this)" class="need-chip chip">
+                    <span class="flex items-center gap-2.5"><span class="text-base">🛏️</span><span>Riparo per la notte</span></span>
+                    <span class="chip-check">✓</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- CARD 4: Urgenza e Note facoltative -->
+              <div class="bg-white rounded-2xl p-3.5 shadow-sm border border-slate-100 space-y-3">
+                <div class="flex items-center gap-2.5">
+                  <div class="w-8 h-8 rounded-xl bg-rose-100 flex items-center justify-center text-base">⏱️</div>
+                  <div>
+                    <p class="font-extrabold text-slate-900 text-[13px] leading-tight">Quanto è urgente</p>
+                    <p class="text-[10px] text-slate-500">Livello di priorità e dettagli utili</p>
+                  </div>
+                </div>
+                <div>
+                  <input type="hidden" id="citUrgency" value="Media" />
+                  <div class="grid grid-cols-3 gap-1.5">
+                    <button type="button" data-value="Alta" onclick="selectUrgency(this)" class="urg-btn">🔴<span>Alta</span><small>Emergenza</small></button>
+                    <button type="button" data-value="Media" onclick="selectUrgency(this)" class="urg-btn active">🟠<span>Media</span><small>Supporto</small></button>
+                    <button type="button" data-value="Bassa" onclick="selectUrgency(this)" class="urg-btn">🟢<span>Bassa</span><small>Monitoraggio</small></button>
+                  </div>
+                </div>
+                <div>
+                  <label class="block font-bold text-slate-700 mb-1">Note (facoltative)</label>
+                  <textarea id="citNotes" rows="2" placeholder="Es. punti di riferimento, numero di persone, dettagli utili per la squadra..." class="w-full px-3 py-2 rounded-xl bg-slate-100 border border-transparent focus:bg-white focus:border-blue-400 focus:outline-none resize-none"></textarea>
+                </div>
+              </div>
+
+              <button type="submit" class="w-full py-3 rounded-2xl bg-[#1B365D] hover:bg-blue-900 text-white font-extrabold text-[13px] shadow-md transition">
+                Invia la segnalazione
+              </button>
+              <p class="text-[10px] text-slate-400 text-center pb-2">I dati arrivano solo alla Sala Operativa Sociale (GDPR).</p>
+            </form>
+          </div>
+
+        </div>
+        <p class="text-[11px] text-slate-500 mt-2.5 text-center">
+          Tocca l'icona <strong>STEP Roma</strong> nella schermata Home iOS per avviare la PWA
+        </p>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 2: TRIAGE SOS (BACK-OFFICE) ==================== -->
+    <section id="view2" class="hidden space-y-6">
+      <!-- Riquadro Esplicativo Triage SOS -->
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+        <span class="inline-block text-[11px] font-extrabold uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-md mb-3">
+          STRATO 2 — SALA OPERATIVA SOCIALE
+        </span>
+        <h2 class="text-2xl font-extrabold text-slate-900 tracking-tight mb-2">
+          Obiettivo del Triage: dal dato grezzo all'intervento mirato
+        </h2>
+        <p class="text-sm text-slate-600 leading-relaxed mb-4">
+          La centrale operativa funge da filtro intelligente tra i cittadini e le unità sul campo, trasformando segnalazioni multiple in interventi validati, proporzionati e tutelati sotto il profilo etico e GDPR.
+        </p>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+          <div class="bg-slate-50 rounded-xl p-3.5 border border-slate-200">
+            <p class="font-extrabold text-[#1B365D] mb-1">1. Clustering Spaziale</p>
+            <p class="text-slate-600">Accorpa segnalazioni ravvicinate sullo stesso soggetto in un unico ticket (Indice IDD).</p>
+          </div>
+          <div class="bg-slate-50 rounded-xl p-3.5 border border-slate-200">
+            <p class="font-extrabold text-[#1B365D] mb-1">2. Tutela Anti-Abuso</p>
+            <p class="text-slate-600">Scarta segnalazioni improprie o punitive non finalizzate al supporto umanitario.</p>
+          </div>
+          <div class="bg-slate-50 rounded-xl p-3.5 border border-slate-200">
+            <p class="font-extrabold text-[#1B365D] mb-1">3. Routing per Competenza</p>
+            <p class="text-slate-600">Smista i ticket tra Terzo Settore (bisogni ordinari) e CRI / 118 / PC (emergenze).</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Coda Operativa Triage -->
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+        <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
+          <div>
+            <div class="flex flex-wrap items-center gap-2">
+              <h3 class="text-lg font-extrabold text-slate-900">Coda segnalazioni in ingresso</h3>
+              <span id="coldAlertBadge" class="hidden text-[10px] font-extrabold uppercase tracking-wider bg-sky-100 text-sky-800 border border-sky-300 px-2.5 py-0.5 rounded-full">❄️ Piano Freddo Attivo (&lt; 3°C)</span>
+            </div>
+            <div class="flex items-center gap-1.5 mt-2" id="triageFilterGroup">
+              <button onclick="setTriageFilter('all')" id="tFilterAll" class="px-3 py-1 rounded-lg text-xs font-bold bg-[#1B365D] text-white transition">Tutte</button>
+              <button onclick="setTriageFilter('pending')" id="tFilterPending" class="px-3 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition">Da validare</button>
+              <button onclick="setTriageFilter('assigned')" id="tFilterAssigned" class="px-3 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition">Assegnate</button>
+            </div>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <button onclick="toggleColdWeatherAlert()" id="coldAlertBtn" class="px-3.5 py-2 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-900 border border-sky-200 font-bold text-xs transition">
+              ❄️ Allerta Piano Freddo: OFF
+            </button>
+            <button onclick="addPhoneHotlineReport()" class="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 font-bold text-xs transition" title="Simula una segnalazione arrivata dal Numero Verde gratuito per inclusione digitale">
+              ☎️ + Chiamata Numero Verde
+            </button>
+            <button onclick="runDeduplication()" class="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs shadow-sm transition">
+              ⚡ Esegui Clustering Spaziale (Deduplica)
+            </button>
+          </div>
+        </div>
+
+        <div id="triageList" class="space-y-3"></div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 3: UNITÀ MOBILI & KPI ==================== -->
+    <section id="view3" class="hidden space-y-6">
+      <!-- 6 KPI live, calcolati da timestamp e stati dei ticket -->
+      <p class="text-[11px] text-slate-500">ℹ️ Tempi simulati per la demo: 1 secondo reale = 1 minuto. Passa il mouse su un indicatore per vedere la formula.</p>
+      <div class="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        <div title="Media di (T chiusura sul campo − T segnalazione) sui ticket chiusi con contatto (presa in carico, beni, rifiuto)" class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+          <p class="text-[11px] font-bold text-slate-500 uppercase">Tempo Medio Risposta (TMR)</p>
+          <p id="kpiTmr" class="text-2xl font-black text-[#1B365D] mt-1">—</p>
+          <p id="kpiTmrSub" class="text-[11px] text-slate-500 mt-0.5">Segnalazione → intervento sul campo</p>
+        </div>
+        <div title="(ticket chiusi con presa in carico o fornitura beni / ticket validati) × 100" class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+          <p class="text-[11px] font-bold text-slate-500 uppercase">Conversione Assistenziale (TCA)</p>
+          <p id="kpiTca" class="text-2xl font-black text-[#1B365D] mt-1">—</p>
+          <p class="text-[11px] text-slate-500 mt-0.5">Ticket validati che generano aiuto reale</p>
+        </div>
+        <div title="[1 − (ticket unici / segnalazioni grezze ricevute)] × 100" class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+          <p class="text-[11px] font-bold text-slate-500 uppercase">Indice Deduplicazione (IDD)</p>
+          <p id="kpiIdd" class="text-2xl font-black text-[#1B365D] mt-1">—</p>
+          <p class="text-[11px] text-slate-500 mt-0.5">Segnalazioni ridondanti accorpate</p>
+        </div>
+        <div title="(interventi validati a più di 2 km dall'hub di presidio più vicino / interventi totali) × 100" class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+          <p class="text-[11px] font-bold text-slate-500 uppercase">Copertura Extra-Hub (ICE)</p>
+          <p id="kpiIce" class="text-2xl font-black text-[#1B365D] mt-1">—</p>
+          <p class="text-[11px] text-slate-500 mt-0.5">Interventi oltre 2 km dagli hub di presidio</p>
+        </div>
+        <div title="(ticket chiusi con rifiuto dell'assistenza / ticket chiusi) × 100" class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+          <p class="text-[11px] font-bold text-slate-500 uppercase">Tasso di Rifiuto (TRF)</p>
+          <p id="kpiRif" class="text-2xl font-black text-[#1B365D] mt-1">—</p>
+          <p id="kpiRifSub" class="text-[11px] text-slate-500 mt-0.5">Ticket chiusi con rifiuto</p>
+        </div>
+        <div title="Media di (T assegnazione − T segnalazione) sui ticket validati" class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+          <p class="text-[11px] font-bold text-slate-500 uppercase">Tempo Medio di Triage (TMT)</p>
+          <p id="kpiTtt" class="text-2xl font-black text-[#1B365D] mt-1">—</p>
+          <p class="text-[11px] text-slate-500 mt-0.5">Segnalazione → assegnazione squadra</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div class="lg:col-span-7 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-extrabold text-slate-900 text-sm">Mappa Operativa Roma — Unità CRI / Protezione Civile</h3>
+            <span class="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">Accesso riservato Strato 3</span>
+          </div>
+          <label id="pendingToggleWrap" class="flex items-center gap-2 text-[11px] font-semibold text-slate-600 mb-2 cursor-pointer">
+            <input type="checkbox" id="pendingToggle" checked onchange="showPendingOnMap=this.checked; initOrUpdateMap()" />
+            Mostra anche i ticket da validare (visibili solo alla Sala Operativa)
+          </label>
+          <div id="map"></div>
+          <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-[11px] text-slate-600">
+            <p class="sm:col-span-2 font-bold text-slate-700 uppercase text-[10px]">Legenda</p>
+            <p><span class="inline-block w-3 h-3 rounded-full align-middle" style="background:#dc2626"></span> Alta &nbsp;<span class="inline-block w-3 h-3 rounded-full align-middle" style="background:#f59e0b"></span> Media &nbsp;<span class="inline-block w-3 h-3 rounded-full align-middle" style="background:#10b981"></span> Bassa <span class="text-slate-400">(pieno = in corso)</span></p>
+            <p><span class="inline-block w-3 h-3 rounded-full align-middle" style="background:#dc262680;border:2px dashed #475569"></span> Tratteggiato = da validare</p>
+            <p><span class="inline-block w-3 h-3 rounded-full align-middle" style="background:#fff;border:3px solid #059669"></span> Anello verde = chiuso con aiuto</p>
+            <p><span class="inline-block w-3 h-3 rounded-full align-middle" style="background:#fff;border:3px solid #64748b"></span> Anello grigio = rifiuto / non più presente</p>
+            <p class="sm:col-span-2"><span class="inline-block w-3 h-3 rounded-full align-middle" style="background:#94a3b830;border:1.5px dashed #64748b"></span> Cerchio tratteggiato = area di presidio (raggio 2 km dagli hub)</p>
+          </div>
+        </div>
+
+        <div class="lg:col-span-5 bg-white p-4 pb-3 rounded-2xl border border-slate-200 shadow-sm flex flex-col">
+          <h3 class="font-extrabold text-slate-900 text-sm mb-3">Ticket attivi assegnati alle squadre</h3>
+          <div class="relative flex-1 min-h-[360px]">
+            <div id="fieldTicketsList" class="absolute inset-0 overflow-y-auto space-y-3 pr-1"></div>
+          </div>
+        </div>
+      </div>
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <h3 class="font-extrabold text-slate-900 text-sm">Interventi per distanza dagli hub di presidio</h3>
+          <div class="flex flex-wrap items-center gap-3 text-[11px] text-slate-600">
+            <span><span class="inline-block w-3 h-3 rounded-sm align-middle bg-slate-400"></span> Entro 2 km</span>
+            <span><span class="inline-block w-3 h-3 rounded-sm align-middle bg-blue-500"></span> 2–5 km</span>
+            <span><span class="inline-block w-3 h-3 rounded-sm align-middle bg-[#1B365D]"></span> Oltre 5 km</span>
+          </div>
+        </div>
+        <div id="hubChart" class="space-y-2"></div>
+        <p id="hubChartNote" class="text-[11px] text-slate-500 mt-3"></p>
+        <p class="text-[10px] text-slate-400 mt-1">Hub di presidio (elenco simulato, da validare con la Sala Operativa): Stazione Termini, Stazione Tiburtina, San Pietro. Si usa la distanza in linea d'aria dal punto della segnalazione all'hub più vicino.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    let otpCode = "4829";
+    let otpVerified = false;
+    let rawReportsCount = 6;
+    let mapInstance = null;
+    let markersLayer = null;
+    let toastTimer = null;
+    let currentTriageFilter = "all";
+    let coldAlertActive = false;
+    let ticketSeq = 106;
+    let currentRole = 'demo';
+    let showPendingOnMap = true;
+
+    // Orologio di simulazione: 1 secondo reale = 1 minuto simulato
+    const SIM_START = Date.now(), SIM_SPEED = 60;
+    function simNow() { return SIM_START + (Date.now() - SIM_START) * SIM_SPEED; }
+
+    const BASE = { lat: 41.8947, lng: 12.4839 }; // base operativa simulata (centro città)
+    const URG_RANK = { Alta: 0, Media: 1, Bassa: 2 };
+    const URG_COLOR = { Alta: '#dc2626', Media: '#f59e0b', Bassa: '#10b981' };
+    const GOOD_OUTCOMES = ['closed_helped', 'closed_goods'];
+    const CLOSED_STATES = ['closed_helped', 'closed_goods', 'closed_refused', 'closed_absent'];
+    const OUTCOME_LABEL = {
+      closed_helped: 'Presa in carico', closed_goods: 'Beni forniti',
+      closed_refused: 'Rifiuto assistenza', closed_absent: 'Persona non più presente'
+    };
+    const isClosed = r => CLOSED_STATES.includes(r.status);
+    // Hub di presidio: punti dove i servizi operano già con rotte fisse (elenco simulato)
+    const HUB_RADIUS_KM = 2;
+    const HUBS = [
+      { name: 'Stazione Termini', lat: 41.9009, lng: 12.5016 },
+      { name: 'Stazione Tiburtina', lat: 41.9105, lng: 12.5305 },
+      { name: 'San Pietro', lat: 41.9022, lng: 12.4539 }
+    ];
+    function hav(lat1, lng1, lat2, lng2) {
+      const R = 6371, t = x => x * Math.PI / 180;
+      const dLa = t(lat2 - lat1), dLo = t(lng2 - lng1);
+      const a = Math.sin(dLa / 2) ** 2 + Math.cos(t(lat1)) * Math.cos(t(lat2)) * Math.sin(dLo / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(a));
+    }
+    function hubInfo(r) {
+      return HUBS.map(h => ({ name: h.name, km: hav(r.lat, r.lng, h.lat, h.lng) })).sort((x, y) => x.km - y.km)[0];
+    }
+    const isExtraHub = r => hubInfo(r).km > HUB_RADIUS_KM;
+    function minutes(ms) { return Math.round(ms / 60000); }
+    function distKm(r) { return hav(BASE.lat, BASE.lng, r.lat, r.lng); }
+    // Ordine: da validare → in corso → chiusi; poi urgenza; poi vicinanza (in corso) o attesa (da validare)
+    function sortTickets(list) {
+      const rank = r => r.status === 'pending' ? 0 : r.status === 'assigned' ? 1 : 2;
+      return [...list].sort((a, b) => {
+        const ra = rank(a), rb = rank(b);
+        if (ra !== rb) return ra - rb;
+        if (ra === 2) return (b.tClosed || 0) - (a.tClosed || 0);
+        const u = URG_RANK[a.urgency] - URG_RANK[b.urgency];
+        if (u) return u;
+        return ra === 1 ? distKm(a) - distKm(b) : (a.tCreated || 0) - (b.tCreated || 0);
+      });
+    }
+
+    function showToast(msg, icon = "✅") {
+      const banner = document.getElementById("toastBanner");
+      document.getElementById("toastMessage").textContent = msg;
+      document.getElementById("toastIcon").textContent = icon;
+      banner.classList.remove("hidden");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => banner.classList.add("hidden"), 4200);
+    }
+
+    function hideToast() {
+      document.getElementById("toastBanner").classList.add("hidden");
+    }
+
+    let reports = [
+      {
+        id: "TK-101",
+        citizen: "Giulia B. (OTP)",
+        location: "Via Marsala 29 (Stazione Termini - Mun. I)",
+        lat: 41.9015, lng: 12.5018,
+        zone: "Centro",
+        need: "Coperte / Kit freddo",
+        urgency: "Alta",
+        status: "pending",
+        duplicates: 2,
+        unit: "Unità Strada CRI Roma"
+      },
+      {
+        id: "TK-102",
+        citizen: "Luca M. (OTP)",
+        location: "Via Tuscolana 855 (Cinecittà - Mun. VII)",
+        lat: 41.8551, lng: 12.5684,
+        zone: "Periferia",
+        need: "Acqua / Generi alimentari",
+        urgency: "Media",
+        status: "pending",
+        duplicates: 1,
+        unit: "Comunità di Sant'Egidio"
+      },
+      {
+        id: "TK-103",
+        citizen: "Elena R. (OTP)",
+        location: "Via Casilina 1012 (Tor Bella Monaca - Mun. VI)",
+        lat: 41.8692, lng: 12.6012,
+        zone: "Periferia",
+        need: "Assistenza sanitaria / Malore",
+        urgency: "Alta",
+        status: "assigned",
+        duplicates: 1,
+        unit: "Protezione Civile + 118"
+      },
+      {
+        id: "TK-104",
+        citizen: "Davide P. (OTP)",
+        location: "Piazzale Stazione Tiburtina (Mun. II)",
+        lat: 41.9102, lng: 12.5305,
+        zone: "Centro",
+        need: "Riparo notturno",
+        urgency: "Media",
+        status: "assigned",
+        duplicates: 1,
+        unit: "Sala Operativa Sociale"
+      },
+      {
+        id: "TK-105",
+        citizen: "Sara T. (OTP)",
+        location: "Viale Marconi 140 (Mun. XI)",
+        lat: 41.8628, lng: 12.4735,
+        zone: "Periferia",
+        need: "Coperte / Kit freddo",
+        urgency: "Media",
+        status: "closed_helped",
+        duplicates: 1,
+        unit: "Unità Strada CRI Roma"
+      }
+    ];
+
+    // Timestamp dei ticket di esempio (tempi simulati)
+    (function seedTimes() {
+      const t = simNow(), m = x => t - x * 60000;
+      const T = {
+        'TK-101': { c: m(35) }, 'TK-102': { c: m(20) },
+        'TK-103': { c: m(95), a: m(80) }, 'TK-104': { c: m(60), a: m(48) },
+        'TK-105': { c: m(160), a: m(140), x: m(112) }
+      };
+      reports.forEach(r => { const q = T[r.id]; if (q) { r.tCreated = q.c; r.tAssigned = q.a || null; r.tClosed = q.x || null; } });
+    })();
+
+    // Phone Guided Walkthrough Steps
+    function setPhoneStep(step) {
+      document.getElementById('phoneScreen0').classList.toggle('hidden', step !== 0);
+      document.getElementById('phoneScreen1').classList.toggle('hidden', step !== 1);
+      document.getElementById('phoneScreen2').classList.toggle('hidden', step !== 2);
+
+      [0, 1, 2].forEach(i => {
+        const btn = document.getElementById('stepPill' + i);
+        if (i === step) {
+          btn.className = "py-2 px-2 rounded-lg text-xs font-bold border-2 border-[#1B365D] bg-[#1B365D] text-white transition text-center";
+        } else {
+          btn.className = "py-2 px-2 rounded-lg text-xs font-bold border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 transition text-center";
+        }
+      });
+    }
+
+    function launchPwaFromHome(fromQr = false) {
+      setPhoneStep(1);
+      document.getElementById('splashCaption').textContent = fromQr
+        ? "QR Code Pensilina ATAC riconosciuto • Avvio senza download..."
+        : "";
+      const bar = document.getElementById('splashBar');
+      bar.style.width = "25%";
+      setTimeout(() => { bar.style.width = "100%"; }, 100);
+      setTimeout(() => { setPhoneStep(2); }, 1100);
+    }
+
+    // Step 2 UI helpers (card amichevoli)
+    function toggleNeed(btn) {
+      btn.classList.toggle('active');
+      const activeBtns = Array.from(document.querySelectorAll('.need-chip.active'));
+      if (activeBtns.length === 0) {
+        btn.classList.add('active');
+        showToast("Seleziona almeno un bisogno primario.", "⚠️");
+        return;
+      }
+      document.getElementById('citNeed').value = activeBtns.map(b => b.dataset.value).join(' + ');
+    }
+    function selectUrgency(btn) {
+      document.querySelectorAll('.urg-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('citUrgency').value = btn.dataset.value;
+    }
+    function updateLocationLabel() {
+      const val = document.getElementById('citLocation').value.trim();
+      document.getElementById('locLabel').textContent = val || "Indirizzo non specificato";
+    }
+    function resetReportUi() {
+      document.querySelectorAll('.need-chip').forEach((b, idx) => {
+        if (idx === 0) b.classList.add('active');
+        else b.classList.remove('active');
+      });
+      document.getElementById('citNeed').value = "Coperte / Kit freddo";
+      selectUrgency(document.querySelector('.urg-btn[data-value="Media"]'));
+      document.getElementById('citLocation').value = "Via Marsala 29 (Stazione Termini - Mun. I)";
+      updateLocationLabel();
+    }
+
+    // OTP Simulation
+    function sendSimulatedOtp() {
+      const phone = document.getElementById('citPhone').value.trim();
+      if (!phone) {
+        showToast("Inserisci prima un numero di cellulare per ricevere il codice OTP.", "⚠️");
+        return;
+      }
+      otpCode = String(Math.floor(1000 + Math.random() * 9000));
+      document.getElementById('generatedOtpCode').textContent = otpCode;
+      document.getElementById('otpBox').classList.remove('hidden');
+      showToast(`SMS simulato inviato a ${phone} con codice ${otpCode}`, "📩");
+    }
+
+    function autoFillOtp() {
+      document.getElementById('otpInput').value = otpCode;
+    }
+
+    function verifyOtp() {
+      const entered = document.getElementById('otpInput').value.trim();
+      if (entered === otpCode) {
+        otpVerified = true;
+        document.getElementById('otpBox').classList.add('hidden');
+        document.getElementById('otpVerifiedBadge').classList.remove('hidden');
+        showToast("Numero di telefono verificato con successo!", "✅");
+      } else {
+        showToast("Codice OTP non valido. Usa le 4 cifre del banner giallo.", "❌");
+      }
+    }
+
+    // Submit Citizen Report
+    function submitCitizenReport(e) {
+      e.preventDefault();
+      if (!otpVerified) {
+        showToast("Completa prima la verifica rapida tramite codice OTP.", "⚠️");
+        return;
+      }
+      const nome = document.getElementById('citNome').value.trim();
+      const cognome = document.getElementById('citCognome').value.trim();
+      const locationText = document.getElementById('citLocation').value.trim() || "Via Marsala 29 (Stazione Termini - Mun. I)";
+      const need = document.getElementById('citNeed').value;
+      const urgency = document.getElementById('citUrgency').value;
+      const notes = document.getElementById('citNotes').value.trim();
+
+      // Infer approximate Rome coordinates & zone from typed address
+      const lowerLoc = locationText.toLowerCase();
+      let lat = 41.9015, lng = 12.5018, zone = "Centro";
+      if (lowerLoc.includes("tiburtina")) { lat = 41.9102; lng = 12.5305; zone = "Centro"; }
+      else if (lowerLoc.includes("tuscolana") || lowerLoc.includes("cinecittà")) { lat = 41.8551; lng = 12.5684; zone = "Periferia"; }
+      else if (lowerLoc.includes("marconi") || lowerLoc.includes("eur") || lowerLoc.includes("ostiense")) { lat = 41.8628; lng = 12.4735; zone = "Periferia"; }
+      else if (lowerLoc.includes("casilina") || lowerLoc.includes("tor bella")) { lat = 41.8692; lng = 12.6012; zone = "Periferia"; }
+      else if (!lowerLoc.includes("marsala") && !lowerLoc.includes("termini") && !lowerLoc.includes("centro")) {
+        lat = 41.8820 + (Math.random() - 0.5) * 0.04;
+        lng = 12.5200 + (Math.random() - 0.5) * 0.06;
+        zone = "Periferia";
+      }
+
+      const newId = "TK-" + (ticketSeq++);
+      rawReportsCount++;
+
+      const newReport = {
+        id: newId,
+        citizen: `${nome} ${cognome.charAt(0)}. (OTP)`,
+        location: locationText,
+        lat: lat,
+        lng: lng,
+        zone: zone,
+        need: need,
+        urgency: urgency,
+        notes: notes,
+        status: "pending",
+        tCreated: simNow(), tAssigned: null, tClosed: null,
+        duplicates: 1,
+        unit: urgency === "Alta" ? "Protezione Civile + CRI" : "Unità Strada CRI Roma"
+      };
+
+      reports.unshift(newReport);
+
+      // Update citizen private feedback history if present
+      const hist = document.getElementById('citizenHistoryList');
+      if (hist) {
+        const item = document.createElement('div');
+        item.id = "hist-" + newId;
+        item.className = "p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-between";
+        item.innerHTML = `
+          <div>
+            <p class="font-bold text-slate-800">${newReport.location}</p>
+            <p class="text-slate-600">Bisogno: ${newReport.need} • Adesso (${newId})</p>
+          </div>
+          <span id="statusBadge-${newId}" class="px-2.5 py-1 rounded-full bg-amber-500 text-slate-950 font-bold text-[10px]">In Triage SOS</span>
+        `;
+        hist.prepend(item);
+      }
+
+      // Reset form for next test
+      document.getElementById('reportForm').reset();
+      resetReportUi();
+      otpVerified = false;
+      document.getElementById('otpVerifiedBadge').classList.add('hidden');
+
+      renderAll();
+      showToast(`Segnalazione ${newId} trasmessa alla Centrale SOS (Strato 2)!`, "🚀");
+      if (document.getElementById('rbacSelector').value === 'demo') {
+        switchTab(2);
+      }
+    }
+
+    // Layer 2: Cold Weather Alert, Hotline Channel, Deduplication & Validation
+    function toggleColdWeatherAlert() {
+      coldAlertActive = !coldAlertActive;
+      const btn = document.getElementById("coldAlertBtn");
+      const badge = document.getElementById("coldAlertBadge");
+      if (coldAlertActive) {
+        btn.className = "px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white border border-sky-700 font-extrabold text-xs shadow-sm transition";
+        btn.textContent = "❄️ Allerta Piano Freddo: ON";
+        badge.classList.remove("hidden");
+        reports.forEach(r => {
+          if (r.status === "pending" && (r.need.toLowerCase().includes("freddo") || r.need.toLowerCase().includes("riparo") || r.urgency === "Media")) {
+            r.urgency = "Alta";
+            r.unit = "Protezione Civile + CRI";
+          }
+        });
+        showToast("Allerta Piano Freddo attivata: priorità elevata a 'Alta' e attivazione Protezione Civile.", "❄️");
+      } else {
+        btn.className = "px-3.5 py-2 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-900 border border-sky-200 font-bold text-xs transition";
+        btn.textContent = "❄️ Allerta Piano Freddo: OFF";
+        badge.classList.add("hidden");
+        showToast("Allerta Piano Freddo disattivata: ripristinata gestione ordinaria.", "ℹ️");
+      }
+      renderAll();
+    }
+
+    function addPhoneHotlineReport() {
+      const hotlineSamples = [
+        { location: "Via Marsala 29 (Stazione Termini - Mun. I)", lat: 41.9015, lng: 12.5018, zone: "Centro", need: "Coperte / Kit freddo", notes: "Segnalazione telefonica da residente anziano senza smartphone" },
+        { location: "Via Casilina 1012 (Tor Bella Monaca - Mun. VI)", lat: 41.8692, lng: 12.6012, zone: "Periferia", need: "Acqua / Generi alimentari", notes: "Chiamata al Numero Verde 800 44 00 22" }
+      ];
+      const pick = hotlineSamples[rawReportsCount % hotlineSamples.length];
+      const newId = "TK-" + (ticketSeq++);
+      rawReportsCount++;
+      reports.unshift({
+        id: newId,
+        citizen: "Operatore Numero Verde (800 44 00 22)",
+        channel: "Numero Verde SOS",
+        location: pick.location,
+        lat: pick.lat,
+        lng: pick.lng,
+        zone: pick.zone,
+        need: pick.need,
+        urgency: coldAlertActive ? "Alta" : "Media",
+        notes: pick.notes,
+        status: "pending",
+        tCreated: simNow(), tAssigned: null, tClosed: null,
+        duplicates: 1,
+        unit: coldAlertActive ? "Protezione Civile + CRI" : "Unità Strada CRI Roma"
+      });
+      renderAll();
+      showToast(`Chiamata Numero Verde registrata come ${newId} nel flusso unificato.`, "☎️");
+    }
+
+    function runDeduplication() {
+      const seen = {};
+      let merged = 0;
+      reports = reports.filter(r => {
+        if (r.status === 'pending' && seen[r.location]) {
+          seen[r.location].duplicates += r.duplicates;
+          merged++;
+          return false;
+        }
+        seen[r.location] = r;
+        return true;
+      });
+      renderAll();
+      showToast(
+        merged > 0
+          ? `Clustering completato: ${merged} duplicato/i accorpato/i sullo stesso punto urbano.`
+          : "Nessun duplicato attivo da accorpare al momento.",
+        "⚡"
+      );
+    }
+
+    function validateTicket(id) {
+      const r = reports.find(x => x.id === id);
+      if (r) {
+        const unitSel = document.getElementById("unitSelect-" + id);
+        if (unitSel) {
+          r.unit = unitSel.value;
+        }
+        r.status = "assigned";
+        r.tAssigned = simNow();
+        const badge = document.getElementById("statusBadge-" + id);
+        if (badge) {
+          badge.className = "px-2.5 py-1 rounded-full bg-blue-600 text-white font-bold text-[10px]";
+          badge.textContent = "Assegnato a " + r.unit;
+        }
+        renderAll();
+        showToast(`Ticket ${id} validato e assegnato a ${r.unit}.`, "🚑");
+      }
+    }
+
+    function discardTicket(id) {
+      const idx = reports.findIndex(x => x.id === id);
+      if (idx !== -1) {
+        reports.splice(idx, 1);
+        renderAll();
+        showToast(`Segnalazione ${id} scartata (filtro anti-abuso / uso improprio).`, "🛡️");
+      }
+    }
+
+    function setTriageFilter(filter) {
+      currentTriageFilter = filter;
+      const mapBtn = { all: "tFilterAll", pending: "tFilterPending", assigned: "tFilterAssigned" };
+      Object.entries(mapBtn).forEach(([key, btnId]) => {
+        const el = document.getElementById(btnId);
+        if (el) {
+          el.className = key === filter
+            ? "px-3 py-1 rounded-lg text-xs font-bold bg-[#1B365D] text-white transition"
+            : "px-3 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition";
+        }
+      });
+      renderAll();
+    }
+
+    function closeTicket(id, outcome) {
+      const r = reports.find(x => x.id === id);
+      if (r) {
+        r.status = outcome;
+        r.tClosed = simNow();
+        const badge = document.getElementById("statusBadge-" + id);
+        if (badge) {
+          badge.className = "px-2.5 py-1 rounded-full bg-emerald-600 text-white font-bold text-[10px]";
+          badge.textContent = "Chiuso: " + OUTCOME_LABEL[outcome];
+        }
+        renderAll();
+        showToast(`Ticket ${id} chiuso sul campo. KPI aggiornati in tempo reale.`, "📊");
+      }
+    }
+
+    // Navigation & RBAC
+    function switchTab(tabNum) {
+      [1, 2, 3].forEach(n => {
+        document.getElementById('view' + n).classList.toggle('hidden', n !== tabNum);
+        const btn = document.getElementById('tabBtn' + n);
+        if (n === tabNum) {
+          btn.className = "px-3 py-1.5 rounded-lg text-xs font-bold transition bg-white text-[#1B365D] shadow flex items-center gap-1.5";
+        } else {
+          btn.className = "px-3 py-1.5 rounded-lg text-xs font-bold transition text-slate-200 hover:bg-white/10 flex items-center gap-1.5";
+        }
+      });
+      if (tabNum === 3) {
+        setTimeout(initOrUpdateMap, 100);
+      }
+    }
+
+    function changeRole(role) {
+      currentRole = role;
+      document.getElementById('pendingToggleWrap').classList.toggle('hidden', role === 'unit');
+      const tabs = document.getElementById('layerTabs');
+      if (role === 'demo') {
+        tabs.classList.remove('hidden');
+        switchTab(1);
+      } else if (role === 'citizen') {
+        tabs.classList.add('hidden');
+        switchTab(1);
+      } else if (role === 'sos') {
+        tabs.classList.add('hidden');
+        switchTab(2);
+      } else if (role === 'unit') {
+        tabs.classList.add('hidden');
+        switchTab(3);
+      }
+    }
+
+    // Render Back-office, Field Tickets & KPIs
+    function renderAll() {
+      const pending = reports.filter(r => r.status === 'pending');
+      const active = reports.filter(r => r.status === 'assigned');
+      const closedHelped = reports.filter(r => GOOD_OUTCOMES.includes(r.status));
+      const validatedAll = reports.filter(r => r.status !== 'pending');
+
+      document.getElementById('badgePending').textContent = pending.length;
+      document.getElementById('badgeActive').textContent = active.length;
+
+      // Render Triage List
+      const triageDiv = document.getElementById('triageList');
+      const filteredReports = sortTickets(reports).filter(r => {
+        if (currentTriageFilter === "pending") return r.status === "pending";
+        if (currentTriageFilter === "assigned") return r.status !== "pending";
+        return true;
+      });
+      const availableUnits = [
+        "Unità Strada CRI Roma",
+        "Protezione Civile + 118",
+        "Sala Operativa Sociale",
+        "Comunità di Sant'Egidio",
+        "Caritas Diocesana Roma"
+      ];
+      triageDiv.innerHTML = filteredReports.length ? filteredReports.map(r => `
+        <div class="p-4 rounded-xl border ${r.status === 'pending' ? 'border-amber-300 bg-amber-50/40' : 'border-slate-200 bg-slate-50'} flex flex-wrap items-center justify-between gap-3">
+          <div class="flex-1 min-w-[240px]">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="font-extrabold text-xs text-[#1B365D]">${r.id}</span>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${r.channel === 'Numero Verde SOS' ? 'bg-slate-200 text-slate-800' : 'bg-blue-100 text-blue-800'}">${r.channel || 'App PWA'}</span>
+              <span class="text-xs font-bold text-slate-900">${r.location}</span>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${r.urgency === 'Alta' ? 'bg-rose-100 text-rose-800' : r.urgency === 'Media' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}">Urgenza ${r.urgency}</span>
+              ${r.duplicates > 1 ? `<span class="text-[10px] font-extrabold bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">Cluster: ${r.duplicates} segnalazioni accorpate</span>` : ''}
+            </div>
+            <p class="text-xs text-slate-600 mt-1">
+              Bisogno: <strong>${r.need}</strong> • Segnalante: ${r.citizen}
+            </p>
+            ${r.notes ? `<p class="text-[11px] text-slate-500 italic mt-0.5">📝 Note: "${r.notes}"</p>` : ''}
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            ${r.status === 'pending'
+              ? `<select id="unitSelect-${r.id}" class="text-xs font-semibold bg-white border border-slate-300 rounded-lg px-2.5 py-2 text-slate-800 focus:outline-none focus:border-blue-500">
+                  ${availableUnits.map(u => `<option value="${u}" ${u === r.unit ? 'selected' : ''}>${u}</option>`).join('')}
+                </select>
+                <button onclick="validateTicket('${r.id}')" class="px-3.5 py-2 rounded-lg bg-[#1B365D] hover:bg-blue-900 text-white text-xs font-bold transition">Valida e Assegna →</button>
+                <button onclick="discardTicket('${r.id}')" class="px-3 py-2 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-800 text-xs font-bold transition" title="Filtra segnalazione impropria o non umanitaria">Scarta</button>`
+              : `<span class="text-xs font-bold text-emerald-700 bg-emerald-100 px-3 py-1 rounded-full">✓ ${r.status === 'assigned' ? 'In carico a ' + r.unit : 'Intervento chiuso'}</span>`
+            }
+          </div>
+        </div>
+      `).join('') : `<p class="text-xs text-slate-500 text-center py-6">Nessuna segnalazione presente in questo filtro.</p>`;
+
+      // Render Field List (ordinata per urgenza e vicinanza alla base)
+      const fieldDiv = document.getElementById('fieldTicketsList');
+      fieldDiv.innerHTML = sortTickets(validatedAll).map(r => {
+        const open = r.status === 'assigned';
+        const good = GOOD_OUTCOMES.includes(r.status);
+        const badgeCls = open ? 'bg-amber-200 text-amber-950' : good ? 'bg-emerald-200 text-emerald-950' : 'bg-slate-200 text-slate-700';
+        const badgeTxt = open ? 'In corso' : 'Chiuso · ' + OUTCOME_LABEL[r.status];
+        const meta = open
+          ? `<span style="color:${URG_COLOR[r.urgency]}">●</span> Urgenza ${r.urgency} · 📍 a ${distKm(r).toFixed(1)} km dalla base`
+          : `⏱ Chiuso in ${minutes((r.tClosed || 0) - (r.tCreated || 0))} min dalla segnalazione`;
+        return `
+        <div class="p-3.5 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-xs font-extrabold text-[#1B365D]">${r.id} • ${r.unit}</span>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full text-right ${badgeCls}">${badgeTxt}</span>
+          </div>
+          <p class="text-xs font-bold text-slate-800">${r.location}</p>
+          <p class="text-[11px] text-slate-600">Bisogno: ${r.need}</p>
+          <p class="text-[11px] text-slate-500">${isExtraHub(r) ? '🧭 Fuori presidio' : '📌 Area presidiata'} · ${hubInfo(r).km.toFixed(1)} km da ${hubInfo(r).name}</p>
+          <p class="text-[11px] text-slate-500">${meta}</p>
+          ${open ? `
+            <div class="grid grid-cols-2 gap-2 pt-1">
+              <button onclick="closeTicket('${r.id}', 'closed_helped')" class="py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold">🏠 Presa in carico</button>
+              <button onclick="closeTicket('${r.id}', 'closed_goods')" class="py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-bold">🎁 Beni forniti</button>
+              <button onclick="closeTicket('${r.id}', 'closed_refused')" class="py-1.5 rounded-lg bg-slate-300 hover:bg-slate-400 text-slate-800 text-[11px] font-bold">✋ Rifiuto assistenza</button>
+              <button onclick="closeTicket('${r.id}', 'closed_absent')" class="py-1.5 rounded-lg bg-slate-300 hover:bg-slate-400 text-slate-800 text-[11px] font-bold">🔍 Non più presente</button>
+            </div>
+          ` : ''}
+        </div>`;
+      }).join('');
+
+      // KPI calcolati da stati e timestamp
+      const avg = arr => arr.reduce((x, y) => x + y, 0) / arr.length;
+      const contact = reports.filter(r => ['closed_helped', 'closed_goods', 'closed_refused'].includes(r.status) && r.tCreated && r.tClosed);
+      const tmr = contact.length ? minutes(avg(contact.map(r => r.tClosed - r.tCreated))) : null;
+      const tca = validatedAll.length ? Math.round(closedHelped.length / validatedAll.length * 100) : null;
+      const rawTotal = reports.reduce((sum, r) => sum + (r.duplicates || 1), 0);
+      const idd = reports.length ? Math.max(0, Math.round((1 - reports.length / rawTotal) * 100)) : 0;
+      const extraHub = validatedAll.filter(isExtraHub).length;
+      const ice = validatedAll.length ? Math.round(extraHub / validatedAll.length * 100) : null;
+      const closedAll = reports.filter(isClosed);
+      const refused = closedAll.filter(r => r.status === 'closed_refused').length;
+      const rif = closedAll.length ? Math.round(refused / closedAll.length * 100) : null;
+      const triaged = validatedAll.filter(r => r.tAssigned && r.tCreated);
+      const tmt = triaged.length ? minutes(avg(triaged.map(r => r.tAssigned - r.tCreated))) : null;
+
+      const pct = v => v === null ? '—' : v + '%';
+      const mins = v => v === null ? '—' : v + ' min';
+      document.getElementById('kpiTmr').textContent = mins(tmr);
+      document.getElementById('kpiTmrSub').textContent = contact.length ? `Media su ${contact.length} interventi con contatto` : 'Nessun intervento chiuso ancora';
+      document.getElementById('kpiTca').textContent = pct(tca);
+      document.getElementById('kpiIdd').textContent = idd + '%';
+      document.getElementById('kpiIce').textContent = pct(ice);
+      document.getElementById('kpiRif').textContent = pct(rif);
+      document.getElementById('kpiRifSub').textContent = closedAll.length ? `${refused} rifiuti su ${closedAll.length} ticket chiusi` : 'Nessun ticket chiuso ancora';
+      document.getElementById('kpiTtt').textContent = mins(tmt);
+
+      // Grafico interventi per fascia di distanza dagli hub
+      const bands = [
+        { label: 'Entro 2 km', cls: 'bg-slate-400', test: km => km <= 2 },
+        { label: '2–5 km', cls: 'bg-blue-500', test: km => km > 2 && km <= 5 },
+        { label: 'Oltre 5 km', cls: 'bg-[#1B365D]', test: km => km > 5 }
+      ].map(b => ({ ...b, n: validatedAll.filter(r => b.test(hubInfo(r).km)).length }));
+      const maxV = Math.max(1, ...bands.map(b => b.n));
+      document.getElementById('hubChart').innerHTML = bands.map(b => `
+        <div class="flex items-center gap-3 text-xs">
+          <span class="w-24 font-bold text-slate-700">${b.label}</span>
+          <div class="flex-1 bg-slate-100 rounded-full h-4 overflow-hidden"><div class="h-4 rounded-full ${b.cls}" style="width:${Math.round(b.n / maxV * 100)}%"></div></div>
+          <span class="w-24 text-right text-slate-600 font-semibold">${b.n} ${b.n === 1 ? 'intervento' : 'interventi'}</span>
+        </div>`).join('');
+      document.getElementById('hubChartNote').textContent = ice === null ? 'Nessun intervento validato.' : `${ice}% degli interventi è oltre 2 km dagli hub di presidio (indicatore ICE).`;
+
+      if (mapInstance) initOrUpdateMap();
+    }
+
+    function initOrUpdateMap() {
+      if (!mapInstance) {
+        mapInstance = L.map('map').setView([41.8902, 12.5150], 11);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap'
+        }).addTo(mapInstance);
+        markersLayer = L.layerGroup().addTo(mapInstance);
+      }
+      mapInstance.invalidateSize();
+      markersLayer.clearLayers();
+      HUBS.forEach(h => {
+        L.circle([h.lat, h.lng], { radius: HUB_RADIUS_KM * 1000, color: '#64748b', weight: 1.5, dashArray: '5 5', fillColor: '#94a3b8', fillOpacity: 0.12 })
+          .bindTooltip(`Hub di presidio: ${h.name} (raggio ${HUB_RADIUS_KM} km)`).addTo(markersLayer);
+      });
+      const showPending = currentRole !== 'unit' && showPendingOnMap;
+      reports.forEach(r => {
+        let opts, stato;
+        if (r.status === 'pending') {
+          if (!showPending) return;
+          opts = { radius: 9, fillColor: URG_COLOR[r.urgency], fillOpacity: 0.45, color: '#475569', weight: 2, dashArray: '3 3' };
+          stato = 'Da validare (triage)';
+        } else if (r.status === 'assigned') {
+          opts = { radius: 9, fillColor: URG_COLOR[r.urgency], fillOpacity: 0.95, color: '#ffffff', weight: 2 };
+          stato = 'In corso';
+        } else {
+          opts = { radius: 8, fillColor: '#ffffff', fillOpacity: 1, color: GOOD_OUTCOMES.includes(r.status) ? '#059669' : '#64748b', weight: 4 };
+          stato = 'Chiuso · ' + OUTCOME_LABEL[r.status];
+        }
+        L.circleMarker([r.lat, r.lng], opts)
+          .bindPopup(`<strong>${r.id} - ${r.location}</strong><br/>Stato: ${stato}<br/>Urgenza: ${r.urgency}<br/>Bisogno: ${r.need}<br/>Squadra: ${r.unit}<br/>Hub più vicino: ${hubInfo(r).name} (${hubInfo(r).km.toFixed(1)} km)`)
+          .addTo(markersLayer);
+      });
+    }
+
+    renderAll();
+  </script>
+</body>
+</html>
